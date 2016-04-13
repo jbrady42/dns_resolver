@@ -58,3 +58,17 @@ func TestLookupHost_ValidServer(t *testing.T) {
 		t.Error("google-public-dns-a.google.com should be resolved to 8.8.8.8")
 	}
 }
+
+func TestLookupHost_ReuseServer(t *testing.T) {
+	resolver := New([]string{"8.8.8.8", "8.8.4.4"})
+	resolver.ReuseConnection = true
+	result, err := resolver.LookupHost("google-public-dns-a.google.com")
+	if err != nil {
+		fmt.Println(err.Error())
+		t.Error("Should succeed dns lookup")
+	}
+
+	if result[0].String() != "8.8.8.8" {
+		t.Error("google-public-dns-a.google.com should be resolved to 8.8.8.8")
+	}
+}
