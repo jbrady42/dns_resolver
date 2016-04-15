@@ -67,16 +67,45 @@ func (r *DnsResolver) getConnection(address string) (*dns.Conn, error) {
 
 // LookupHost returns IP addresses of provied host.
 // In case of timeout retries query RetryTimes times.
-func (r *DnsResolver) LookupHost(host string) ([]net.IP, error) {
-	return r.lookupHost(host, r.RetryTimes)
+func (r *DnsResolver) LookupHost(host string) (result []net.IP, err error) {
+	in, err := r.performWithRetry(host, r.RetryTimes, dns.TypeA)
+
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range in.Answer {
+		if t, ok := record.(*dns.A); ok {
+			result = append(result, t.A)
+		}
+	}
+	return result, err
 }
 
-func (r *DnsResolver) lookupHost(host string, triesLeft int) (result []net.IP, err error) {
+// LookupHostFull returns IP addresses and CNAMES of provied host.
+// In case of timeout retries query RetryTimes times.
+func (r *DnsResolver) LookupHostFull(host string) (result []net.IP, resultCname []string, err error) {
+	in, err := r.performWithRetry(host, r.RetryTimes, dns.TypeA)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, record := range in.Answer {
+		switch r := record.(type) {
+		case *dns.A:
+			result = append(result, r.A)
+		case *dns.CNAME:
+			resultCname = append(resultCname, r.Target)
+		}
+	}
+	return result, resultCname, err
+}
+
+func (r *DnsResolver) performWithRetry(host string, triesLeft int, reqType uint16) (result *dns.Msg, err error) {
 	m1 := new(dns.Msg)
 	m1.Id = dns.Id()
 	m1.RecursionDesired = true
 	m1.Question = make([]dns.Question, 1)
-	m1.Question[0] = dns.Question{dns.Fqdn(host), dns.TypeA, dns.ClassINET}
+	m1.Question[0] = dns.Question{dns.Fqdn(host), reqType, dns.ClassINET}
 
 	server := r.Servers[r.r.Intn(len(r.Servers))]
 
@@ -96,7 +125,7 @@ func (r *DnsResolver) lookupHost(host string, triesLeft int) (result []net.IP, e
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "i/o timeout") && triesLeft > 0 {
 			triesLeft--
-			return r.lookupHost(host, triesLeft)
+			return r.performWithRetry(host, triesLeft, reqType)
 		}
 		return result, err
 	}
@@ -105,10 +134,5 @@ func (r *DnsResolver) lookupHost(host string, triesLeft int) (result []net.IP, e
 		return result, errors.New(dns.RcodeToString[in.Rcode])
 	}
 
-	for _, record := range in.Answer {
-		if t, ok := record.(*dns.A); ok {
-			result = append(result, t.A)
-		}
-	}
-	return result, err
+	return in, nil
 }
