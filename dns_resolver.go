@@ -112,12 +112,14 @@ func (r *DnsResolver) performWithRetry(host string, triesLeft int, reqType uint1
 	var in *dns.Msg
 
 	if r.ReuseConnection {
-		connection, err := r.getConnection(server)
+		conn, err := r.getConnection(server)
 		if err != nil {
 			return nil, err
 		}
-		connection.WriteMsg(m1)
-		in, err = connection.ReadMsg()
+		conn.WriteMsg(m1)
+		// Set timeout
+		conn.SetReadDeadline(time.Now().Add(dnsTimeout))
+		in, err = conn.ReadMsg()
 	} else {
 		in, err = dns.Exchange(m1, server)
 	}
