@@ -13,7 +13,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-var dnsTimeout = 2 * time.Second
+var dnsTimeout = 20 * time.Second
 
 // DnsResolver represents a dns resolver
 type DnsResolver struct {
@@ -88,7 +88,9 @@ func (r *DnsResolver) LookupHostFull(host string) (result []net.IP, resultCname 
 	if err != nil {
 		return nil, nil, err
 	}
-
+	if in == nil {
+		return result, resultCname, errors.New("Resolver nil result: ")
+	}
 	for _, record := range in.Answer {
 		switch r := record.(type) {
 		case *dns.A:
